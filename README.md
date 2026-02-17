@@ -486,6 +486,19 @@ servagent/
   .env.example                    # Configuration template
 ```
 
+## Learn More
+
+### MCP (Model Context Protocol)
+
+- [modelcontextprotocol.io](https://modelcontextprotocol.io) — Official documentation, guides, and tutorials
+- [GitHub repository](https://github.com/modelcontextprotocol/modelcontextprotocol) — Specification and links to documentation
+- [Specification (2025-11-25)](https://modelcontextprotocol.io/specification/2025-11-25) — Direct access to the dated specification
+
+### Skills
+
+- [agentskills.io](https://agentskills.io/) — Agent Skills documentation
+- [GitHub repository](https://github.com/agentskills/agentskills) — Agent Skills specification and examples
+
 ## License
 
 MIT
