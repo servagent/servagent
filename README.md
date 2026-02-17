@@ -92,7 +92,7 @@ The script automatically:
 
 ```bash
 # Check status
-sudo systemctl status servagent
+servagent status
 
 # View logs
 sudo journalctl -u servagent -f
@@ -118,16 +118,30 @@ cp .env.example .env
 
 # Run
 servagent
+
+# Available commands
+servagent --help
+servagent --version
 ```
+
+## Status
+
+Check the service status and current configuration:
+
+```bash
+servagent status
+```
+
+Displays: systemd service state (active/inactive/failed), PID, uptime, and configuration summary (port, API key, OAuth, TLS, enabled tools).
 
 ## Uninstallation
 
 To completely remove Servagent from the server:
 
 ```bash
-sudo bash uninstall.sh              # Interactive (confirmation required)
-sudo bash uninstall.sh -y           # Non-interactive (no confirmation)
-sudo bash uninstall.sh --keep-certs # Keep Let's Encrypt certificates
+servagent uninstall              # Interactive (confirmation required)
+servagent uninstall -y           # Non-interactive (no confirmation)
+servagent uninstall --keep-certs # Keep Let's Encrypt certificates
 ```
 
 The script automatically removes:
@@ -142,12 +156,12 @@ The script automatically removes:
 
 ## Update
 
-After cloning the project on the server, use the update script:
+Update to the latest version:
 
 ```bash
-sudo bash update.sh            # Update from the current branch
-sudo bash update.sh develop    # Update from a specific branch
-sudo bash update.sh --force    # Force reinstallation even if already up to date
+servagent update             # Update from the current branch
+servagent update develop     # Update from a specific branch
+servagent update --force     # Force reinstallation even if already up to date
 ```
 
 The script automatically:
@@ -469,11 +483,12 @@ The content of each `SKILL.md` is injected as-is into the MCP instructions under
 servagent/
   src/servagent/
     __init__.py        # Version
+    cli.py             # CLI entry point (click subcommands: run, status, uninstall, update)
     config.py          # Configuration (pydantic-settings)
     auth.py            # Authentication middleware (Bearer + Basic Auth + OAuth)
     oauth_provider.py  # OAuth 2.0 provider with SQLite storage + static client
     tools.py           # All MCP tools
-    server.py          # Entry point, Starlette app + MCP (Streamable HTTP + SSE + .well-known)
+    server.py          # Server module, Starlette app + MCP (Streamable HTTP + SSE + .well-known)
   skills/              # Skills directory (content in .gitignore)
     .gitkeep
   pyproject.toml                  # Metadata and dependencies
