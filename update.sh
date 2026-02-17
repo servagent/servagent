@@ -139,10 +139,12 @@ else
     info "Version: ${VERSION}"
 
     TARBALL_URL="https://github.com/${GITHUB_REPO}/archive/refs"
-    if [[ "$VERSION" == "main" || "$VERSION" == "develop" ]]; then
-        TARBALL_URL="${TARBALL_URL}/heads/${VERSION}.tar.gz"
-    else
+    if [[ "$VERSION" =~ ^v[0-9] ]]; then
+        # Looks like a version tag (v0.1.0, v1.2.3-beta, etc.)
         TARBALL_URL="${TARBALL_URL}/tags/${VERSION}.tar.gz"
+    else
+        # Treat as a branch name (main, develop, staging, feature/foo, etc.)
+        TARBALL_URL="${TARBALL_URL}/heads/${VERSION}.tar.gz"
     fi
 
     TMPDIR=$(mktemp -d)
