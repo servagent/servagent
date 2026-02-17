@@ -18,14 +18,14 @@ python -m servagent.server
 
 # Remote one-liner install (no git clone needed)
 curl -sSfL https://raw.githubusercontent.com/servagent/servagent/main/install-remote.sh | sudo bash
-curl -sSfL https://raw.githubusercontent.com/servagent/servagent/main/install-remote.sh | sudo bash -s -- votre-domaine.com
+curl -sSfL https://raw.githubusercontent.com/servagent/servagent/main/install-remote.sh | sudo bash -s -- your-domain.com
 curl -sSfL https://raw.githubusercontent.com/servagent/servagent/main/install-remote.sh | sudo bash -s -- --version v0.2.0
 
 # Production install (from git clone)
 sudo bash install.sh                                  # HTTP on port 8765
-sudo bash install.sh votre-domaine.com                # HTTPS via Let's Encrypt
+sudo bash install.sh your-domain.com                  # HTTPS via Let's Encrypt
 sudo bash install.sh --full-access                    # HTTP + sudo privileges
-sudo bash install.sh --full-access votre-domaine.com  # HTTPS + sudo privileges
+sudo bash install.sh --full-access your-domain.com    # HTTPS + sudo privileges
 
 # Uninstall
 sudo bash uninstall.sh              # Interactive (confirmation required)
@@ -74,6 +74,56 @@ sudo bash uninstall.sh --keep-certs # Keep Let's Encrypt certificates
 - `pydantic-settings>=2.0.0` — Configuration management
 - `aiosqlite>=0.20.0` — Async SQLite for OAuth persistence
 - `starlette` / `uvicorn` — ASGI server (bundled with mcp)
+
+## Versioning & Releases
+
+The project follows [Semantic Versioning](https://semver.org/) (SemVer):
+
+- **Patch** `0.1.0` → `0.1.1` — Bug fixes, no breaking changes
+- **Minor** `0.1.0` → `0.2.0` — New features, backward-compatible
+- **Major** `0.2.0` → `1.0.0` — Breaking changes (API, tools signature, config)
+
+While in `0.x.x`, the project is considered in active development with no stability guarantees.
+
+### Version sources (must stay in sync)
+
+- `pyproject.toml` → `version = "X.Y.Z"`
+- `src/servagent/__init__.py` → `__version__ = "X.Y.Z"`
+
+### Release workflow
+
+```bash
+# 1. Create a release branch from main
+git checkout -b release/vX.Y.Z
+
+# 2. Update version in both files
+#    - pyproject.toml
+#    - src/servagent/__init__.py
+
+# 3. Update CHANGELOG.md with changes since last release
+
+# 4. Commit, push, open PR, merge to main
+
+# 5. Tag and publish the release from main
+git checkout main && git pull
+git tag vX.Y.Z
+git push origin vX.Y.Z
+gh release create vX.Y.Z --generate-notes
+```
+
+Once a release is published, `install-remote.sh` can install it via `--version vX.Y.Z`. Without `--version`, it installs the latest release (falls back to `main` if no releases exist).
+
+### CHANGELOG format
+
+Follow [Keep a Changelog](https://keepachangelog.com/) conventions in `CHANGELOG.md`:
+
+```markdown
+## [X.Y.Z] - YYYY-MM-DD
+### Added
+### Changed
+### Fixed
+### Removed
+```
 
 ## Configuration
 
