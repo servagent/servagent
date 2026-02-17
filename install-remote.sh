@@ -124,4 +124,16 @@ INSTALLER="${EXTRACT_DIR}/install.sh"
 
 info "Starting installation..."
 echo ""
-bash "$INSTALLER" "${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}"
+
+# Always pass -y when invoked from remote installer: the user already chose
+# to install by running the curl one-liner, and stdin is not a terminal so
+# interactive prompts would read empty input and silently abort.
+HAS_YES=false
+for _a in "${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}"; do
+    [[ "$_a" == "-y" || "$_a" == "--yes" ]] && HAS_YES=true
+done
+if ! $HAS_YES; then
+    INSTALL_ARGS+=("-y")
+fi
+
+bash "$INSTALLER" "${INSTALL_ARGS[@]}"

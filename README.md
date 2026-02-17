@@ -61,7 +61,7 @@ curl -sSfL https://raw.githubusercontent.com/servagent/servagent/main/install-re
 curl -sSfL https://raw.githubusercontent.com/servagent/servagent/main/install-remote.sh | sudo bash -s -- --version v0.2.0
 ```
 
-The script automatically downloads the latest release (or the `main` branch if no releases exist), extracts the archive, and runs the installation.
+The script automatically downloads the latest release (or the `main` branch if no releases exist), extracts the archive, and runs the installation. The `-y` flag is injected automatically so that interactive prompts are skipped (since stdin is not a terminal in a `curl | bash` pipeline).
 
 ## Installation from a Git Clone
 
