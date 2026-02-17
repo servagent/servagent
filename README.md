@@ -132,7 +132,7 @@ Check the service status and current configuration:
 servagent status
 ```
 
-Displays: systemd service state (active/inactive/failed), PID, uptime, and configuration summary (port, API key, OAuth, TLS, enabled tools). API keys and OAuth secrets are masked (only the last 6 characters are shown).
+Displays: systemd service state (active/inactive/failed), PID, uptime, and configuration summary (port, API key, OAuth, TLS, enabled tools). API keys and OAuth secrets are masked (only the last 6 characters are shown). If the `.env` file is not readable, the command automatically escalates with `sudo`.
 
 ## API Key Management
 

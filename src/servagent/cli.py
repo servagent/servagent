@@ -66,9 +66,17 @@ def _needs_sudo(path: Path) -> bool:
     return not os.access(path, os.R_OK | os.W_OK)
 
 
-def _reexec_with_sudo() -> None:
-    """Re-execute the current command with sudo, preserving all arguments."""
-    cmd = ["sudo", sys.executable, "-m", "servagent.cli"] + sys.argv[1:]
+def _reexec_with_sudo(*, inject_yes: bool = False) -> None:
+    """Re-execute the current command with sudo, preserving all arguments.
+
+    When *inject_yes* is True and ``--yes`` is not already present, it is
+    appended so that ``@click.confirmation_option`` does not re-prompt
+    (stdin may be EOF after the parent already consumed the answer).
+    """
+    args = sys.argv[1:]
+    if inject_yes and "--yes" not in args:
+        args = args + ["--yes"]
+    cmd = ["sudo", sys.executable, "-m", "servagent.cli"] + args
     result = subprocess.run(cmd)
     raise SystemExit(result.returncode)
 
@@ -160,6 +168,13 @@ def _systemctl_query(prop: str) -> str:
 @cli.command()
 def status() -> None:
     """Show service status and configuration."""
+    # Auto-escalate with sudo if the .env file is not readable, so the
+    # user does not have to figure out ``sudo servagent`` PATH issues.
+    import os as _os
+    env_path = _find_env_file()
+    if env_path is not None and not _os.access(env_path, _os.R_OK):
+        _reexec_with_sudo()
+
     click.echo(f"servagent v{__version__}")
     click.echo()
 
@@ -230,7 +245,7 @@ def status() -> None:
             tools_display = tools_cfg
         click.echo(f"    Tools:   {tools_display}")
     except PermissionError:
-        click.echo("  Configuration:  " + click.style("permission denied (run with sudo to see config)", fg="yellow"))
+        click.echo("  Configuration:  " + click.style("permission denied (the .env file is not readable)", fg="yellow"))
 
 
 # ------------------------------------------------------------------
@@ -337,7 +352,7 @@ def apikey_renew(env_file: str | None) -> None:
         raise SystemExit(1)
 
     if _needs_sudo(env_path):
-        _reexec_with_sudo()
+        _reexec_with_sudo(inject_yes=True)
 
     existing = _env_get(env_path, "SERVAGENT_API_KEY")
     if not existing:
@@ -374,7 +389,7 @@ def apikey_remove(env_file: str | None) -> None:
         raise SystemExit(1)
 
     if _needs_sudo(env_path):
-        _reexec_with_sudo()
+        _reexec_with_sudo(inject_yes=True)
 
     existing = _env_get(env_path, "SERVAGENT_API_KEY")
     if not existing:
@@ -500,7 +515,7 @@ def renew(env_file: str | None) -> None:
         raise SystemExit(1)
 
     if _needs_sudo(env_path):
-        _reexec_with_sudo()
+        _reexec_with_sudo(inject_yes=True)
 
     existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
     if not existing_id:
@@ -550,7 +565,7 @@ def remove(env_file: str | None, keep_db: bool) -> None:
         raise SystemExit(1)
 
     if _needs_sudo(env_path):
-        _reexec_with_sudo()
+        _reexec_with_sudo(inject_yes=True)
 
     existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
     if not existing_id:
