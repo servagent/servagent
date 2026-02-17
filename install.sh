@@ -166,7 +166,7 @@ fi
 # --- Install application ---
 info "Installing to ${APP_DIR}..."
 mkdir -p "${APP_DIR}"
-cp -r src pyproject.toml "${APP_DIR}/"
+cp -r "${SCRIPT_DIR}/src" "${SCRIPT_DIR}/pyproject.toml" "${APP_DIR}/"
 
 # --- Create virtual environment ---
 info "Creating virtual environment..."
