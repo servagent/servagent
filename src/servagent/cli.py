@@ -193,38 +193,44 @@ def status() -> None:
     click.echo()
 
     # --- Configuration ---
-    from servagent.config import settings
+    try:
+        from servagent.config import settings
+        # Trigger lazy loading before printing the header, so PermissionError
+        # is caught before any partial output.
+        _ = settings.port
 
-    click.echo("  Configuration:")
-    click.echo(f"    Port:    {settings.port}")
-    click.echo(f"    Host:    {settings.host}")
+        click.echo("  Configuration:")
+        click.echo(f"    Port:    {settings.port}")
+        click.echo(f"    Host:    {settings.host}")
 
-    if settings.api_key:
-        masked = settings.api_key[-6:]
-        click.echo(f"    API key: {click.style(f'***{masked}', fg='green')}")
-    else:
-        click.echo(f"    API key: {click.style('not set', fg='yellow')}")
+        if settings.api_key:
+            masked = settings.api_key[-6:]
+            click.echo(f"    API key: {click.style(f'***{masked}', fg='green')}")
+        else:
+            click.echo(f"    API key: {click.style('not set', fg='yellow')}")
 
-    if settings.oauth_issuer_url:
-        click.echo(f"    OAuth:   {click.style('enabled', fg='green')}")
-        click.echo(f"      Issuer:  {settings.oauth_issuer_url}")
-        if settings.oauth_client_id:
-            click.echo(f"      Client:  {settings.oauth_client_id}")
-        if settings.oauth_client_secret:
-            masked_secret = settings.oauth_client_secret[-6:]
-            click.echo(f"      Secret:  {click.style(f'***{masked_secret}', fg='green')}")
-    else:
-        click.echo(f"    OAuth:   {click.style('disabled', dim=True)}")
+        if settings.oauth_issuer_url:
+            click.echo(f"    OAuth:   {click.style('enabled', fg='green')}")
+            click.echo(f"      Issuer:  {settings.oauth_issuer_url}")
+            if settings.oauth_client_id:
+                click.echo(f"      Client:  {settings.oauth_client_id}")
+            if settings.oauth_client_secret:
+                masked_secret = settings.oauth_client_secret[-6:]
+                click.echo(f"      Secret:  {click.style(f'***{masked_secret}', fg='green')}")
+        else:
+            click.echo(f"    OAuth:   {click.style('disabled', dim=True)}")
 
-    tls_status = click.style("enabled", fg="green") if (settings.tls_certfile and settings.tls_keyfile) else click.style("disabled", dim=True)
-    click.echo(f"    TLS:     {tls_status}")
+        tls_status = click.style("enabled", fg="green") if (settings.tls_certfile and settings.tls_keyfile) else click.style("disabled", dim=True)
+        click.echo(f"    TLS:     {tls_status}")
 
-    tools_cfg = settings.tools.strip()
-    if tools_cfg.lower() == "all":
-        tools_display = "all"
-    else:
-        tools_display = tools_cfg
-    click.echo(f"    Tools:   {tools_display}")
+        tools_cfg = settings.tools.strip()
+        if tools_cfg.lower() == "all":
+            tools_display = "all"
+        else:
+            tools_display = tools_cfg
+        click.echo(f"    Tools:   {tools_display}")
+    except PermissionError:
+        click.echo("  Configuration:  " + click.style("permission denied (run with sudo to see config)", fg="yellow"))
 
 
 # ------------------------------------------------------------------

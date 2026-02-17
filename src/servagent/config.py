@@ -102,4 +102,23 @@ class Settings(BaseSettings):
         return Path.home() / ".servagent" / "oauth.db"
 
 
-settings = Settings()
+class _LazySettings:
+    """Proxy that defers ``Settings()`` instantiation until first attribute access.
+
+    This avoids a top-level ``PermissionError`` when the ``.env`` file exists
+    but is not readable by the current user (e.g. ``servagent status`` run
+    without sudo while ``/opt/servagent/.env`` is root-only).
+    """
+
+    _instance: Settings | None = None
+
+    def _get(self) -> Settings:
+        if self._instance is None:
+            self._instance = Settings()
+        return self._instance
+
+    def __getattr__(self, name: str):  # noqa: ANN001
+        return getattr(self._get(), name)
+
+
+settings: Settings = _LazySettings()  # type: ignore[assignment]
