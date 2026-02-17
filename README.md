@@ -200,7 +200,7 @@ All options are configurable via environment variables or `.env` file:
 | `SERVAGENT_UPLOAD_MAX_SIZE` | `100000000` | Maximum upload file size (bytes, 100 MB) |
 | `SERVAGENT_TLS_CERTFILE` | _(empty)_ | Path to TLS certificate (fullchain.pem) |
 | `SERVAGENT_TLS_KEYFILE` | _(empty)_ | Path to TLS private key (privkey.pem) |
-| `SERVAGENT_TOOLS` | `execute_command,upload_file` | Tools to expose (comma-separated list, or `all`) |
+| `SERVAGENT_TOOLS` | `execute_command,write_file,read_file,edit_file,upload_file` | Tools to expose (comma-separated list, or `all`) |
 | `SERVAGENT_LOG_LEVEL` | `INFO` | Log level |
 | `SERVAGENT_OAUTH_ISSUER_URL` | _(empty)_ | OAuth issuer URL (include `/mcp`). Enables OAuth when set. |
 | `SERVAGENT_OAUTH_CLIENT_ID` | _(empty)_ | Operator Client ID: static OAuth client + `/mcp/register` protection |

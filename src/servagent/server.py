@@ -202,7 +202,25 @@ _SERVER_RULES = """\
 Read stderr on failure. If timed_out is true, the command was killed.
 - Do not retry permission errors (exit_code 126/127) — they require user intervention.
 - Destructive commands (rm, mkfs, dd, shutdown, reboot) — confirm with the user first.
-- Large outputs are truncated."""
+- Large outputs are truncated.
+
+## File writing best practices
+- **ALWAYS use `write_file` to create or overwrite files** — it is faster, more \
+reliable, and avoids shell escaping issues. NEVER use `execute_command` with \
+heredocs (`cat <<EOF`), `echo`, or `printf` to write file content.
+- **Use `edit_file` for targeted modifications** to existing files instead of \
+rewriting them entirely.
+- `execute_command` is for **running programs** (install packages, restart services, \
+git, docker, etc.), not for writing file content.
+
+## Multi-file projects (websites, configs, apps)
+When building a project with multiple files (e.g. a website, an application):
+1. **Create the directory structure first** with `execute_command` (`mkdir -p`).
+2. **Write each file individually** with `write_file` — one file per tool call.
+3. **Install dependencies / set permissions** with `execute_command`.
+4. **Verify** the result (e.g. check syntax, restart service, test URL).
+Keep each file focused and under 500 lines. Split large files when possible \
+(e.g. separate CSS/JS from HTML)."""
 
 
 def _build_instructions() -> str:
