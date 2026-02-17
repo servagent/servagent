@@ -87,7 +87,16 @@ fi
 # --- Copy sources ---
 info "Copying sources to ${APP_DIR}..."
 cp -r "${SCRIPT_DIR}/src" "${SCRIPT_DIR}/pyproject.toml" "${APP_DIR}/"
+
+# Update shell scripts
+for _script in install.sh uninstall.sh update.sh generate-oauth-credentials.sh; do
+    [[ -f "${SCRIPT_DIR}/${_script}" ]] && cp "${SCRIPT_DIR}/${_script}" "${APP_DIR}/"
+done
+
 chown -R "${APP_NAME}:${APP_NAME}" "${APP_DIR}/src" "${APP_DIR}/pyproject.toml"
+
+# Ensure global symlink exists
+ln -sf "${VENV_DIR}/bin/servagent" /usr/local/bin/servagent
 
 # --- Reinstall package ---
 info "Reinstalling package..."

@@ -90,6 +90,12 @@ if [[ -f "$SUDOERS_FILE" ]]; then
     ITEMS_FOUND+=("Sudoers file: ${SUDOERS_FILE}")
 fi
 
+# Global symlink
+SYMLINK="/usr/local/bin/servagent"
+if [[ -L "$SYMLINK" ]]; then
+    ITEMS_FOUND+=("Symlink: ${SYMLINK}")
+fi
+
 # Application directory
 if [[ -d "$APP_DIR" ]]; then
     ITEMS_FOUND+=("Application directory: ${APP_DIR}")
@@ -222,7 +228,15 @@ if [[ -n "$CERT_DIR" ]] && [[ -d "$CERT_DIR" ]] && ! $KEEP_CERTS; then
 fi
 
 # =====================================================================
-# 5. REMOVE APPLICATION DIRECTORY
+# 5. REMOVE GLOBAL SYMLINK
+# =====================================================================
+if [[ -L "$SYMLINK" ]]; then
+    info "Removing symlink ${SYMLINK}..."
+    rm -f "$SYMLINK"
+fi
+
+# =====================================================================
+# 6. REMOVE APPLICATION DIRECTORY
 # =====================================================================
 if [[ -d "$APP_DIR" ]]; then
     info "Removing application directory ${APP_DIR}..."
@@ -230,7 +244,7 @@ if [[ -d "$APP_DIR" ]]; then
 fi
 
 # =====================================================================
-# 6. REMOVE SYSTEM USER
+# 7. REMOVE SYSTEM USER
 # =====================================================================
 if id "${SERVICE_USER}" &>/dev/null; then
     info "Removing system user '${SERVICE_USER}'..."
@@ -239,7 +253,7 @@ if id "${SERVICE_USER}" &>/dev/null; then
 fi
 
 # =====================================================================
-# 7. REMOVE CERTKEYS GROUP (if no other members)
+# 8. REMOVE CERTKEYS GROUP (if no other members)
 # =====================================================================
 if getent group certkeys &>/dev/null; then
     MEMBERS=$(getent group certkeys | cut -d: -f4)

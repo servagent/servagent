@@ -168,11 +168,23 @@ info "Installing to ${APP_DIR}..."
 mkdir -p "${APP_DIR}"
 cp -r "${SCRIPT_DIR}/src" "${SCRIPT_DIR}/pyproject.toml" "${APP_DIR}/"
 
+# Copy shell scripts so CLI subcommands (status, uninstall, update) work
+for _script in install.sh uninstall.sh update.sh generate-oauth-credentials.sh; do
+    [[ -f "${SCRIPT_DIR}/${_script}" ]] && cp "${SCRIPT_DIR}/${_script}" "${APP_DIR}/"
+done
+
+# Ensure skills directory exists
+mkdir -p "${APP_DIR}/skills"
+
 # --- Create virtual environment ---
 info "Creating virtual environment..."
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/pip" install --upgrade pip hatchling
 "${VENV_DIR}/bin/pip" install -e "${APP_DIR}"
+
+# --- Create global symlink ---
+info "Creating global command symlink..."
+ln -sf "${VENV_DIR}/bin/servagent" /usr/local/bin/servagent
 
 # --- Generate API key & .env ---
 if [[ ! -f "${ENV_FILE}" ]]; then
