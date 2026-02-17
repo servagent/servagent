@@ -517,6 +517,19 @@ def main() -> None:
             "(SERVAGENT_OAUTH_ISSUER_URL is not set). The credentials will have no effect."
         )
 
+    if settings.oauth_issuer_url:
+        from urllib.parse import urlparse
+        parsed = urlparse(settings.oauth_issuer_url)
+        if parsed.scheme != "https" and parsed.hostname not in ("localhost", "127.0.0.1"):
+            logger.error(
+                "FATAL: SERVAGENT_OAUTH_ISSUER_URL must use HTTPS (got %s). "
+                "If behind a reverse proxy with TLS, update the URL to use https://. "
+                "Example: https://%s/mcp",
+                settings.oauth_issuer_url,
+                parsed.hostname or "your-domain.com",
+            )
+            raise SystemExit(1)
+
     if settings.oauth_issuer_url and not (settings.tls_certfile and settings.tls_keyfile):
         logger.warning(
             "WARNING: OAuth is enabled without TLS. "
