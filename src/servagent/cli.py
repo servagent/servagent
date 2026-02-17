@@ -60,6 +60,19 @@ def _find_env_file() -> Path | None:
     return None
 
 
+def _needs_sudo(path: Path) -> bool:
+    """Return True if we cannot read+write the file without elevated privileges."""
+    import os
+    return not os.access(path, os.R_OK | os.W_OK)
+
+
+def _reexec_with_sudo() -> None:
+    """Re-execute the current command with sudo, preserving all arguments."""
+    cmd = ["sudo", sys.executable, "-m", "servagent.cli"] + sys.argv[1:]
+    result = subprocess.run(cmd)
+    raise SystemExit(result.returncode)
+
+
 def _generate_credentials() -> tuple[str, str]:
     """Generate a CLIENT_ID and CLIENT_SECRET pair."""
     client_id = "servagent-" + secrets.token_hex(8)
@@ -260,17 +273,54 @@ def oauth() -> None:
     """Manage OAuth 2.0 credentials."""
 
 
+def _guess_issuer_url(env_path: Path) -> str:
+    """Build a default issuer URL from .env configuration."""
+    certfile = _env_get(env_path, "SERVAGENT_TLS_CERTFILE")
+    keyfile = _env_get(env_path, "SERVAGENT_TLS_KEYFILE")
+    host = _env_get(env_path, "SERVAGENT_HOST") or "0.0.0.0"
+    port_str = _env_get(env_path, "SERVAGENT_PORT") or "8765"
+    port = int(port_str) if port_str.isdigit() else 8765
+
+    has_tls = bool(certfile and keyfile)
+    scheme = "https" if has_tls else "http"
+
+    # 0.0.0.0 / 127.0.0.1 are not useful in a public URL — try to
+    # extract the domain from the TLS cert path (Let's Encrypt convention).
+    if host in ("0.0.0.0", "127.0.0.1"):
+        # /etc/letsencrypt/live/<domain>/fullchain.pem
+        parts = certfile.split("/")
+        if "letsencrypt" in parts and "live" in parts:
+            idx = parts.index("live")
+            if idx + 1 < len(parts):
+                host = parts[idx + 1]
+
+    if host in ("0.0.0.0", "127.0.0.1"):
+        host = "your-domain.com"
+
+    # Omit default ports
+    if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+        return f"{scheme}://{host}/mcp"
+    # Behind Nginx (host=127.0.0.1) the public port is likely 443/80
+    raw_host = _env_get(env_path, "SERVAGENT_HOST") or "0.0.0.0"
+    if raw_host == "127.0.0.1":
+        return f"{scheme}://{host}/mcp"
+    return f"{scheme}://{host}:{port}/mcp"
+
+
 @oauth.command()
-@click.option("--issuer-url", prompt="Issuer URL (e.g. https://your-domain.com/mcp)",
-              help="OAuth issuer URL (must include /mcp).")
+@click.option("--issuer-url", default=None,
+              help="OAuth issuer URL (must include /mcp). Auto-detected if omitted.")
 @click.option("--env-file", type=click.Path(exists=True, dir_okay=False), default=None,
               help="Path to the .env file (auto-detected if omitted).")
-def setup(issuer_url: str, env_file: str | None) -> None:
+def setup(issuer_url: str | None, env_file: str | None) -> None:
     """Generate OAuth credentials and write them to .env."""
     env_path = Path(env_file) if env_file else _find_env_file()
     if env_path is None:
         click.echo("Error: .env file not found. Create one first (cp .env.example .env).", err=True)
         raise SystemExit(1)
+
+    if _needs_sudo(env_path):
+        _reexec_with_sudo()
 
     # Check if OAuth is already configured
     existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
@@ -279,6 +329,11 @@ def setup(issuer_url: str, env_file: str | None) -> None:
         click.echo("  Use 'servagent oauth renew' to regenerate credentials")
         click.echo("  or  'servagent oauth remove' to disable OAuth.")
         raise SystemExit(1)
+
+    # Auto-detect or prompt for issuer URL
+    if issuer_url is None:
+        guessed = _guess_issuer_url(env_path)
+        issuer_url = click.prompt("Issuer URL", default=guessed)
 
     client_id, client_secret = _generate_credentials()
 
@@ -311,6 +366,9 @@ def renew(env_file: str | None) -> None:
     if env_path is None:
         click.echo("Error: .env file not found.", err=True)
         raise SystemExit(1)
+
+    if _needs_sudo(env_path):
+        _reexec_with_sudo()
 
     existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
     if not existing_id:
@@ -358,6 +416,9 @@ def remove(env_file: str | None, keep_db: bool) -> None:
     if env_path is None:
         click.echo("Error: .env file not found.", err=True)
         raise SystemExit(1)
+
+    if _needs_sudo(env_path):
+        _reexec_with_sudo()
 
     existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
     if not existing_id:
