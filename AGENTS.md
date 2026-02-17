@@ -10,11 +10,23 @@
 # Install in development mode
 pip install -e .
 
-# Run the server
-servagent
+# Run the server (all equivalent)
+servagent                    # Default: starts the MCP server
+servagent run                # Explicit subcommand
 
 # Or directly
 python -m servagent.server
+
+# CLI subcommands
+servagent status             # Show service status and configuration
+servagent uninstall          # Uninstall (interactive)
+servagent uninstall -y       # Uninstall (non-interactive)
+servagent uninstall --keep-certs  # Keep Let's Encrypt certs
+servagent update             # Update to latest version
+servagent update develop     # Update from a specific branch
+servagent update --force     # Force reinstall
+servagent --version          # Show version
+servagent --help             # Show help with all subcommands
 
 # Remote one-liner install (no git clone needed)
 curl -sSfL https://raw.githubusercontent.com/servagent/servagent/main/install-remote.sh | sudo bash
@@ -27,7 +39,7 @@ sudo bash install.sh votre-domaine.com                # HTTPS via Let's Encrypt
 sudo bash install.sh --full-access                    # HTTP + sudo privileges
 sudo bash install.sh --full-access votre-domaine.com  # HTTPS + sudo privileges
 
-# Uninstall
+# Uninstall (via shell script directly)
 sudo bash uninstall.sh              # Interactive (confirmation required)
 sudo bash uninstall.sh -y           # Non-interactive
 sudo bash uninstall.sh --keep-certs # Keep Let's Encrypt certificates
@@ -35,7 +47,8 @@ sudo bash uninstall.sh --keep-certs # Keep Let's Encrypt certificates
 
 ## Architecture
 
-- `src/servagent/server.py` — Main entry point, Starlette ASGI app exposing both transports:
+- `src/servagent/cli.py` — CLI entry point using click. `@click.group(invoke_without_command=True)` so `servagent` without arguments starts the server. Subcommands: `run` (start server), `status` (show systemd service status + config), `uninstall` (locate and run `uninstall.sh` via sudo), `update` (locate and run `update.sh` via sudo). Script discovery via `_find_script()` checks `/opt/servagent/` (production) then repo root (dev). `--version` flag from `__version__`
+- `src/servagent/server.py` — Server module, Starlette ASGI app exposing both transports:
   - `/mcp` — Streamable HTTP (Claude Desktop, Claude Code, LM Studio)
   - `/sse` — SSE connection endpoint (legacy clients)
   - `/messages/` — SSE message posting endpoint
@@ -67,12 +80,14 @@ sudo bash uninstall.sh --keep-certs # Keep Let's Encrypt certificates
 - `install.sh` supports `--full-access` flag to grant sudo NOPASSWD to the service user and disable `NoNewPrivileges` in systemd; without the flag, an interactive prompt asks during installation
 - `uninstall.sh` reverses everything done by `install.sh`: stops/removes systemd services, Nginx config, sudoers file, app directory, system user, and optionally Let's Encrypt certificates. Requires confirmation unless `-y` is passed. `--keep-certs` preserves TLS certificates
 - **Tool selection**: `SERVAGENT_TOOLS` controls which tools are exposed. Default is `execute_command,upload_file` (minimal, saves context window for small LLMs). Set to `all` to expose all 18 tools. Invalid tool names are logged as warnings and ignored. In `server.py`, the config string is parsed into a `set[str]` and passed to `register_tools(mcp, enabled_tools=...)`
+- **CLI**: The `servagent` entry point is `servagent.cli:cli` (click group). Without subcommand, it calls `server.main()` to start the server (backward-compatible). `status` queries systemd via `systemctl show` and displays config from `settings`. `uninstall`/`update` delegate to shell scripts found via `_find_script()` (production: `/opt/servagent/`, dev: repo root), executed via `subprocess.run(["sudo", "bash", ...])`. CLI flags map directly to script flags
 
 ## Key Dependencies
 
 - `mcp[cli]>=1.26.0` — Official MCP Python SDK (FastMCP, SSE transport, Streamable HTTP, OAuth server support)
 - `pydantic-settings>=2.0.0` — Configuration management
 - `aiosqlite>=0.20.0` — Async SQLite for OAuth persistence
+- `click>=8.0.0` — CLI framework (subcommands, options, help generation)
 - `starlette` / `uvicorn` — ASGI server (bundled with mcp)
 
 ## Configuration
