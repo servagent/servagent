@@ -100,17 +100,18 @@ async def _send_json_error(
 class AuthMiddleware:
     """Pure ASGI authentication middleware.
 
-    Handles two auth zones:
+    Auth zones:
 
     * ``/.well-known/`` — always public (OAuth discovery).
-    * ``/mcp/*`` — when OAuth is active, **all** sub-paths (including
-      ``/register``, ``/authorize``, ``/token``, ``/revoke``) are
-      delegated entirely to the SDK.  The SDK's ``BearerAuthBackend``
-      validates tokens via ``ServagentOAuthProvider.load_access_token()``,
-      which also recognises a raw ``API_KEY``.  When OAuth is *not*
-      active, the middleware validates the Bearer token itself.
+    * ``/authorize``, ``/token``, ``/register``, ``/revoke`` — public when
+      OAuth is active (these are 307 redirects to ``/mcp/…``).
+    * ``/mcp/*`` — when OAuth is active, delegated entirely to the SDK.
     * Everything else (``/sse``, ``/upload``, …) — Bearer ``API_KEY``.
     """
+
+    # Root-level OAuth paths that redirect to /mcp/... — must be public
+    # so the 307 redirect can reach the client before auth is checked.
+    _OAUTH_REDIRECT_PATHS = frozenset({"/authorize", "/token", "/register", "/revoke"})
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -125,6 +126,11 @@ class AuthMiddleware:
 
         # ── .well-known — always public ──
         if "/.well-known/" in path:
+            await self.app(scope, receive, send)
+            return
+
+        # ── Root-level OAuth redirects — pass through when OAuth is active ──
+        if settings.oauth_issuer_url and path in self._OAUTH_REDIRECT_PATHS:
             await self.app(scope, receive, send)
             return
 

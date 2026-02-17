@@ -66,6 +66,19 @@ def _needs_sudo(path: Path) -> bool:
     return not os.access(path, os.R_OK | os.W_OK)
 
 
+def _ensure_env_readable() -> None:
+    """Re-exec with sudo if the .env exists but is not readable.
+
+    This prevents a confusing ``PermissionError`` from pydantic-settings
+    when a non-root user runs ``servagent`` directly on a production host
+    where ``/opt/servagent/.env`` is owned by root.
+    """
+    import os
+    env_path = _find_env_file()
+    if env_path is not None and not os.access(env_path, os.R_OK):
+        _reexec_with_sudo()
+
+
 def _reexec_with_sudo(*, inject_yes: bool = False) -> None:
     """Re-execute the current command with sudo, preserving all arguments.
 
@@ -91,14 +104,24 @@ def _generate_credentials() -> tuple[str, str]:
 def _env_set(env_path: Path, key: str, value: str) -> None:
     """Set a key=value in a .env file.
 
-    If the key exists (commented or not), it is replaced.
-    Otherwise it is appended.
+    If the key exists (commented or not), the **first** occurrence is
+    replaced and any subsequent duplicates are removed.  Otherwise the
+    entry is appended.
     """
     content = env_path.read_text()
     # Match both "KEY=..." and "# KEY=..."
     pattern = re.compile(rf"^[#\s]*{re.escape(key)}\s*=.*$", re.MULTILINE)
-    if pattern.search(content):
-        content = pattern.sub(f"{key}={value}", content)
+    matches = list(pattern.finditer(content))
+    if matches:
+        new_line = f"{key}={value}"
+        # Replace first match, remove the rest (reverse order to preserve offsets)
+        for i, m in reversed(list(enumerate(matches))):
+            if i == 0:
+                content = content[:m.start()] + new_line + content[m.end():]
+            else:
+                content = content[:m.start()] + content[m.end():]
+        # Clean up blank lines left by duplicate removal
+        content = re.sub(r"\n{3,}", "\n\n", content)
     else:
         content = content.rstrip("\n") + f"\n{key}={value}\n"
     env_path.write_text(content)
@@ -130,6 +153,7 @@ def _env_get(env_path: Path, key: str) -> str:
 def cli(ctx: click.Context) -> None:
     """servagent — Remote server administration via MCP."""
     if ctx.invoked_subcommand is None:
+        _ensure_env_readable()
         from servagent.server import main
         main()
 
@@ -141,6 +165,7 @@ def cli(ctx: click.Context) -> None:
 @cli.command()
 def run() -> None:
     """Start the MCP server."""
+    _ensure_env_readable()
     from servagent.server import main
     main()
 

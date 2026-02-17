@@ -328,6 +328,13 @@ def create_app() -> Starlette:
     oauth_store: OAuthSQLiteStore | None = None
     oauth_provider: ServagentOAuthProvider | None = None
 
+    logger.debug(
+        "OAuth config: issuer_url=%r, client_id=%s, client_secret=%s",
+        settings.oauth_issuer_url or "(empty)",
+        settings.oauth_client_id[:16] + "..." if settings.oauth_client_id else "(empty)",
+        "***" if settings.oauth_client_secret else "(empty)",
+    )
+
     if settings.oauth_issuer_url:
         from servagent.oauth_provider import OAuthSQLiteStore, ServagentOAuthProvider  # noqa: F811
 
@@ -462,6 +469,7 @@ def create_app() -> Starlette:
         return RedirectResponse(url=f"/mcp{inner_path}", status_code=307)
 
     well_known_routes: list = []
+    oauth_redirect_routes: list = []
     if settings.oauth_issuer_url:
         well_known_routes = [
             Route(
@@ -486,11 +494,30 @@ def create_app() -> Starlette:
             ),
         ]
 
+        # --- OAuth endpoint redirects ---
+        # Some MCP clients (e.g. Claude.ai) may send OAuth requests to
+        # root-level paths (/authorize, /token, etc.) instead of the
+        # sub-app paths (/mcp/authorize, /mcp/token).  Add 307 redirects
+        # that forward these requests to the correct /mcp/... paths,
+        # preserving query parameters.
+        async def _oauth_redirect(request: Request) -> Response:
+            from starlette.responses import RedirectResponse
+            target = f"/mcp{request.url.path}"
+            if request.url.query:
+                target = f"{target}?{request.url.query}"
+            return RedirectResponse(url=target, status_code=307)
+
+        for _path in ("/authorize", "/token", "/register", "/revoke"):
+            oauth_redirect_routes.append(
+                Route(_path, endpoint=_oauth_redirect, methods=["GET", "POST", "OPTIONS"]),
+            )
+
     # SSE and messages routes are explicit, streamable-http is mounted
     # at /mcp (not "/" which would swallow /sse and /messages/).
     app = Starlette(
         routes=[
             *well_known_routes,
+            *oauth_redirect_routes,
             Route("/sse", endpoint=handle_sse),
             Route("/upload", endpoint=handle_upload, methods=["POST"]),
             Mount("/messages/", app=sse_transport.handle_post_message),
@@ -530,10 +557,13 @@ def main() -> None:
         raise SystemExit(1)
 
     if has_id and not settings.oauth_issuer_url:
-        logger.warning(
-            "WARNING: OAuth registration credentials are configured but OAuth is disabled "
-            "(SERVAGENT_OAUTH_ISSUER_URL is not set). The credentials will have no effect."
+        logger.error(
+            "FATAL: SERVAGENT_OAUTH_CLIENT_ID and SERVAGENT_OAUTH_CLIENT_SECRET are set "
+            "but SERVAGENT_OAUTH_ISSUER_URL is empty. OAuth will NOT work. "
+            "Run 'servagent oauth setup' again or set SERVAGENT_OAUTH_ISSUER_URL manually. "
+            "Example: SERVAGENT_OAUTH_ISSUER_URL=https://your-domain.com/mcp"
         )
+        raise SystemExit(1)
 
     if settings.oauth_issuer_url:
         from urllib.parse import urlparse
