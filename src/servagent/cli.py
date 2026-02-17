@@ -441,80 +441,47 @@ def _detect_first_ip() -> str:
 def _guess_issuer_url(env_path: Path) -> str | None:
     """Build a default issuer URL from .env configuration.
 
-    Returns ``None`` when the URL cannot be determined (no domain, no IP).
+    Returns ``None`` when the URL cannot be determined.
 
-    Detection logic:
-      1. If ``SERVAGENT_TLS_CERTFILE`` is set, extract the domain from the
-         Let's Encrypt path and use ``https``.
-      2. If behind a reverse proxy (``host=127.0.0.1``) without TLS vars,
-         scan ``/etc/letsencrypt/live/`` to find the domain (Nginx handles
-         TLS in this setup).
-      3. Fall back to the server's first public IP.
+    Priority:
+      1. ``SERVAGENT_BASE_URL`` — explicit public URL set by ``install.sh``
+         (source of truth when a domain was provided at install time).
+      2. ``SERVAGENT_TLS_CERTFILE`` — extract domain from Let's Encrypt path
+         (standalone HTTPS without Nginx).
+      3. Public IP fallback (HTTP-only mode, no domain).
     """
+    # --- Priority 1: explicit base URL from install.sh ---
+    base_url = _env_get(env_path, "SERVAGENT_BASE_URL")
+    if base_url:
+        return f"{base_url.rstrip('/')}/mcp"
+
+    # --- Priority 2: derive from TLS cert path (standalone HTTPS) ---
     certfile = _env_get(env_path, "SERVAGENT_TLS_CERTFILE")
     keyfile = _env_get(env_path, "SERVAGENT_TLS_KEYFILE")
+    if certfile and keyfile:
+        parts = certfile.split("/")
+        if "letsencrypt" in parts and "live" in parts:
+            idx = parts.index("live")
+            if idx + 1 < len(parts):
+                domain = parts[idx + 1]
+                return f"https://{domain}/mcp"
+
+    # --- Priority 3: fall back to public IP (HTTP-only / dev) ---
     host = _env_get(env_path, "SERVAGENT_HOST") or "0.0.0.0"
     port_str = _env_get(env_path, "SERVAGENT_PORT") or "8765"
     port = int(port_str) if port_str.isdigit() else 8765
 
-    has_tls = bool(certfile and keyfile)
-    behind_proxy = (host == "127.0.0.1")
-    domain_from_le = None  # set when domain is found via Let's Encrypt
-
-    # --- Resolve hostname ---
     if host in ("0.0.0.0", "127.0.0.1"):
-        # Try from TLS cert path in .env (Let's Encrypt convention):
-        # /etc/letsencrypt/live/<domain>/fullchain.pem
-        if certfile:
-            parts = certfile.split("/")
-            if "letsencrypt" in parts and "live" in parts:
-                idx = parts.index("live")
-                if idx + 1 < len(parts):
-                    host = parts[idx + 1]
-                    domain_from_le = host
+        detected = _detect_first_ip()
+        if detected:
+            host = detected
 
-        # Behind reverse proxy with no TLS vars — scan Let's Encrypt
-        # directory directly (Nginx handles TLS, certs exist on disk).
-        if host in ("0.0.0.0", "127.0.0.1") and behind_proxy:
-            le_live = Path("/etc/letsencrypt/live")
-            if le_live.is_dir():
-                domains = sorted(
-                    d.name for d in le_live.iterdir()
-                    if d.is_dir() and d.name != "README"
-                )
-                if domains:
-                    host = domains[0]
-                    domain_from_le = host
-
-        # Still unresolved — try the server's public IP
-        if host in ("0.0.0.0", "127.0.0.1"):
-            detected = _detect_first_ip()
-            if detected:
-                host = detected
-
-    # If we still have no usable host, give up
     if host in ("0.0.0.0", "127.0.0.1"):
         return None
 
-    # --- Determine scheme ---
-    # HTTPS when: direct TLS configured, domain found from Let's Encrypt,
-    # or behind reverse proxy with a domain name (proxy handles TLS).
-    if has_tls or domain_from_le:
-        scheme = "https"
-    elif behind_proxy and not host.replace(".", "").isdigit():
-        scheme = "https"
-    else:
-        scheme = "http"
-
-    # --- Build URL ---
-    # Omit default ports
-    if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
-        return f"{scheme}://{host}/mcp"
-    # Behind Nginx (host=127.0.0.1) the public port is likely 443/80
-    raw_host = _env_get(env_path, "SERVAGENT_HOST") or "0.0.0.0"
-    if raw_host == "127.0.0.1":
-        return f"{scheme}://{host}/mcp"
-    return f"{scheme}://{host}:{port}/mcp"
+    if port == 80:
+        return f"http://{host}/mcp"
+    return f"http://{host}:{port}/mcp"
 
 
 @oauth.command()

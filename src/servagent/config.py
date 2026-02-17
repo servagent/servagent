@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     port: int = 8765
     transport: str = "streamable-http"
 
+    # Public base URL (scheme + host + optional port, no trailing slash, no path).
+    # Set automatically by install.sh when a domain is provided.
+    # Used to derive the OAuth issuer URL. Example: https://mcp.example.com
+    base_url: str = ""
+
     # API key for authenticating clients. MUST be set in production.
     api_key: str = ""
 

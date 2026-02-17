@@ -481,6 +481,13 @@ EOF
     systemctl enable --now certbot-renew-mcp.timer
 fi
 
+# --- Persist public base URL in .env ---
+# Used by `servagent oauth setup` to derive the issuer URL.
+if [[ -n "$DOMAIN" ]]; then
+    sed -i '/^SERVAGENT_BASE_URL=/d' "$ENV_FILE"
+    echo "SERVAGENT_BASE_URL=https://${DOMAIN}" >> "$ENV_FILE"
+fi
+
 # =====================================================================
 # 3. START
 # =====================================================================
