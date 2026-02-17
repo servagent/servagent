@@ -367,10 +367,10 @@ In addition to simple Bearer token authentication, the server supports OAuth 2.0
 ### Enabling OAuth
 
 ```bash
-# Interactive: prompts for the issuer URL
+# Auto-detects the issuer URL from TLS cert domain or server IP
 servagent oauth setup
 
-# Non-interactive
+# Explicit issuer URL (if auto-detection fails)
 servagent oauth setup --issuer-url https://your-domain.com/mcp
 ```
 

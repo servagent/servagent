@@ -420,8 +420,29 @@ def oauth() -> None:
     """Manage OAuth 2.0 credentials."""
 
 
-def _guess_issuer_url(env_path: Path) -> str:
-    """Build a default issuer URL from .env configuration."""
+def _detect_first_ip() -> str:
+    """Return the first non-loopback IP address, or empty string."""
+    for cmd in (
+        "ip -brief addr 2>/dev/null | awk '{print $3}' | cut -d/ -f1",
+        "ifconfig 2>/dev/null | grep 'inet ' | awk '{print $2}'",
+        "hostname -I 2>/dev/null",
+    ):
+        try:
+            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            for line in r.stdout.strip().splitlines():
+                ip = line.strip()
+                if ip and ip not in ("127.0.0.1", "::1"):
+                    return ip
+        except Exception:
+            continue
+    return ""
+
+
+def _guess_issuer_url(env_path: Path) -> str | None:
+    """Build a default issuer URL from .env configuration.
+
+    Returns ``None`` when the URL cannot be determined (no domain, no IP).
+    """
     certfile = _env_get(env_path, "SERVAGENT_TLS_CERTFILE")
     keyfile = _env_get(env_path, "SERVAGENT_TLS_KEYFILE")
     host = _env_get(env_path, "SERVAGENT_HOST") or "0.0.0.0"
@@ -441,8 +462,15 @@ def _guess_issuer_url(env_path: Path) -> str:
             if idx + 1 < len(parts):
                 host = parts[idx + 1]
 
+    # Still unresolved — try the server's public IP
     if host in ("0.0.0.0", "127.0.0.1"):
-        host = "your-domain.com"
+        detected = _detect_first_ip()
+        if detected:
+            host = detected
+
+    # If we still have no usable host, give up
+    if host in ("0.0.0.0", "127.0.0.1"):
+        return None
 
     # Omit default ports
     if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
@@ -477,10 +505,17 @@ def setup(issuer_url: str | None, env_file: str | None) -> None:
         click.echo("  or  'servagent oauth remove' to disable OAuth.")
         raise SystemExit(1)
 
-    # Auto-detect or prompt for issuer URL
+    # Auto-detect issuer URL from .env configuration
     if issuer_url is None:
-        guessed = _guess_issuer_url(env_path)
-        issuer_url = click.prompt("Issuer URL", default=guessed)
+        issuer_url = _guess_issuer_url(env_path)
+        if issuer_url is None:
+            click.echo(click.style(
+                "Error: cannot determine issuer URL automatically.\n"
+                "  Use --issuer-url to specify it, e.g.:\n"
+                "    servagent oauth setup --issuer-url https://your-domain.com/mcp",
+                fg="red",
+            ))
+            raise SystemExit(1)
 
     client_id, client_secret = _generate_credentials()
 
