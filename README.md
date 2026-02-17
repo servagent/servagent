@@ -15,7 +15,7 @@ The server exposes two MCP transports simultaneously:
 
 | Transport | Endpoint | Clients |
 |---|---|---|
-| **Streamable HTTP** | `/mcp` | Claude Desktop, Claude Code, LM Studio, modern clients |
+| **Streamable HTTP** | `/mcp` | Claude Code, LM Studio, Claude Desktop (via [mcp-remote](https://www.npmjs.com/package/mcp-remote)), modern clients |
 | **SSE** (legacy) | `/sse` + `/messages/` | Older clients |
 | **File Upload** | `POST /upload` | Any HTTP client (curl, scripts, etc.) |
 
@@ -233,7 +233,9 @@ The MCP endpoint will then be accessible over HTTPS: `https://your-domain.com/mc
 
 ## Connecting from an MCP Client
 
-### Streamable HTTP (Claude Desktop, Claude Code, LM Studio)
+### Claude Code
+
+Claude Code supporte nativement les serveurs MCP distants via Streamable HTTP. Ajoutez cette configuration dans votre fichier de settings Claude Code (`.mcp.json`, project settings, ou via `claude mcp add`) :
 
 ```json
 {
@@ -249,13 +251,51 @@ The MCP endpoint will then be accessible over HTTPS: `https://your-domain.com/mc
 }
 ```
 
+### Claude Desktop
+
+Claude Desktop ne supporte que les serveurs MCP locaux via `stdio`. Pour se connecter à un serveur distant, utilisez [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) comme pont. Ajoutez ceci dans votre `claude_desktop_config.json` :
+
+```json
+{
+  "mcpServers": {
+    "servagent": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://your-domain.com/mcp",
+        "--header",
+        "Authorization: Bearer YOUR_API_KEY"
+      ]
+    }
+  }
+}
+```
+
+> `mcp-remote` crée un serveur stdio local qui relaie les requêtes vers le serveur HTTP distant. Nécessite Node.js installé.
+
+### Autres clients (LM Studio, etc.)
+
+Les clients qui supportent nativement Streamable HTTP peuvent utiliser cette configuration :
+
+```json
+{
+  "mcpServers": {
+    "servagent": {
+      "url": "https://your-domain.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
 ### SSE (Legacy Clients)
 
 ```json
 {
   "mcpServers": {
     "servagent": {
-      "type": "sse",
       "url": "https://your-domain.com/sse",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
