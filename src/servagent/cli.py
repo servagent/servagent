@@ -595,3 +595,7 @@ def remove(env_file: str | None, keep_db: bool) -> None:
     click.echo()
     click.echo(click.style("  OAuth has been disabled.", fg="yellow"))
     click.echo()
+
+
+if __name__ == "__main__":
+    cli()
