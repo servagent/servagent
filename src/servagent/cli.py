@@ -199,11 +199,22 @@ def status() -> None:
     click.echo(f"    Port:    {settings.port}")
     click.echo(f"    Host:    {settings.host}")
 
-    api_status = click.style("configured", fg="green") if settings.api_key else click.style("not set", fg="yellow")
-    click.echo(f"    API key: {api_status}")
+    if settings.api_key:
+        masked = settings.api_key[-6:]
+        click.echo(f"    API key: {click.style(f'***{masked}', fg='green')}")
+    else:
+        click.echo(f"    API key: {click.style('not set', fg='yellow')}")
 
-    oauth_status = click.style("enabled", fg="green") if settings.oauth_issuer_url else click.style("disabled", dim=True)
-    click.echo(f"    OAuth:   {oauth_status}")
+    if settings.oauth_issuer_url:
+        click.echo(f"    OAuth:   {click.style('enabled', fg='green')}")
+        click.echo(f"      Issuer:  {settings.oauth_issuer_url}")
+        if settings.oauth_client_id:
+            click.echo(f"      Client:  {settings.oauth_client_id}")
+        if settings.oauth_client_secret:
+            masked_secret = settings.oauth_client_secret[-6:]
+            click.echo(f"      Secret:  {click.style(f'***{masked_secret}', fg='green')}")
+    else:
+        click.echo(f"    OAuth:   {click.style('disabled', dim=True)}")
 
     tls_status = click.style("enabled", fg="green") if (settings.tls_certfile and settings.tls_keyfile) else click.style("disabled", dim=True)
     click.echo(f"    TLS:     {tls_status}")
@@ -262,6 +273,121 @@ def update(branch: str | None, force: bool) -> None:
 
     result = subprocess.run(cmd)
     raise SystemExit(result.returncode)
+
+
+# ------------------------------------------------------------------
+# apikey
+# ------------------------------------------------------------------
+
+@cli.group()
+def apikey() -> None:
+    """Manage the API key."""
+
+
+@apikey.command("setup")
+@click.option("--env-file", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Path to the .env file (auto-detected if omitted).")
+def apikey_setup(env_file: str | None) -> None:
+    """Generate an API key and write it to .env."""
+    env_path = Path(env_file) if env_file else _find_env_file()
+    if env_path is None:
+        click.echo(click.style("Error: .env file not found. Create one first (cp .env.example .env).", fg="red"))
+        raise SystemExit(1)
+
+    if _needs_sudo(env_path):
+        _reexec_with_sudo()
+
+    existing = _env_get(env_path, "SERVAGENT_API_KEY")
+    if existing:
+        click.echo(f"  API key is already configured (***{existing[-6:]}).")
+        click.echo("  Use 'servagent apikey renew' to regenerate it.")
+        raise SystemExit(1)
+
+    api_key = secrets.token_urlsafe(48)
+    _env_set(env_path, "SERVAGENT_API_KEY", api_key)
+
+    click.echo()
+    click.echo("  API key generated and written to " + click.style(str(env_path), fg="cyan"))
+    click.echo()
+    click.echo(f"    API key: {click.style(api_key, fg='green')}")
+    click.echo()
+    click.echo("  Restart the server for changes to take effect:")
+    if shutil.which("systemctl"):
+        click.echo("    sudo systemctl restart servagent")
+    else:
+        click.echo("    servagent run")
+    click.echo()
+
+
+@apikey.command("renew")
+@click.option("--env-file", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Path to the .env file (auto-detected if omitted).")
+@click.confirmation_option(prompt="This will invalidate the current API key. Continue?")
+def apikey_renew(env_file: str | None) -> None:
+    """Regenerate the API key (invalidates the current one)."""
+    env_path = Path(env_file) if env_file else _find_env_file()
+    if env_path is None:
+        click.echo(click.style("Error: .env file not found.", fg="red"))
+        raise SystemExit(1)
+
+    if _needs_sudo(env_path):
+        _reexec_with_sudo()
+
+    existing = _env_get(env_path, "SERVAGENT_API_KEY")
+    if not existing:
+        click.echo(click.style("  API key is not configured. Use 'servagent apikey setup' first.", fg="red"))
+        raise SystemExit(1)
+
+    api_key = secrets.token_urlsafe(48)
+    _env_set(env_path, "SERVAGENT_API_KEY", api_key)
+
+    click.echo()
+    click.echo("  API key renewed in " + click.style(str(env_path), fg="cyan"))
+    click.echo()
+    click.echo(f"    API key: {click.style(api_key, fg='green')}")
+    click.echo()
+    click.echo("  Restart the server for changes to take effect:")
+    if shutil.which("systemctl"):
+        click.echo("    sudo systemctl restart servagent")
+    else:
+        click.echo("    servagent run")
+    click.echo()
+    click.echo(click.style("  All clients using the old key must be updated.", fg="yellow"))
+    click.echo()
+
+
+@apikey.command("remove")
+@click.option("--env-file", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Path to the .env file (auto-detected if omitted).")
+@click.confirmation_option(prompt="This will remove API key authentication. Continue?")
+def apikey_remove(env_file: str | None) -> None:
+    """Remove the API key from .env."""
+    env_path = Path(env_file) if env_file else _find_env_file()
+    if env_path is None:
+        click.echo(click.style("Error: .env file not found.", fg="red"))
+        raise SystemExit(1)
+
+    if _needs_sudo(env_path):
+        _reexec_with_sudo()
+
+    existing = _env_get(env_path, "SERVAGENT_API_KEY")
+    if not existing:
+        click.echo("  API key is not configured. Nothing to remove.")
+        return
+
+    _env_comment_out(env_path, "SERVAGENT_API_KEY")
+
+    click.echo()
+    click.echo("  API key commented out in " + click.style(str(env_path), fg="cyan"))
+    click.echo()
+    click.echo("  Restart the server for changes to take effect:")
+    if shutil.which("systemctl"):
+        click.echo("    sudo systemctl restart servagent")
+    else:
+        click.echo("    servagent run")
+    click.echo()
+    click.echo(click.style("  API key authentication has been disabled.", fg="yellow"))
+    click.echo()
 
 
 # ------------------------------------------------------------------

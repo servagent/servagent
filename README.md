@@ -132,7 +132,19 @@ Check the service status and current configuration:
 servagent status
 ```
 
-Displays: systemd service state (active/inactive/failed), PID, uptime, and configuration summary (port, API key, OAuth, TLS, enabled tools).
+Displays: systemd service state (active/inactive/failed), PID, uptime, and configuration summary (port, API key, OAuth, TLS, enabled tools). API keys and OAuth secrets are masked (only the last 6 characters are shown).
+
+## API Key Management
+
+Generate and manage the API key via the CLI:
+
+```bash
+servagent apikey setup       # Generate an API key and write it to .env
+servagent apikey renew       # Regenerate the API key (invalidates the current one)
+servagent apikey remove      # Comment out the API key in .env
+```
+
+The key is displayed in full only at generation time (`setup` / `renew`). Use `servagent status` to verify it is configured (masked).
 
 ## Uninstallation
 
@@ -540,7 +552,7 @@ The content of each `SKILL.md` is injected as-is into the MCP instructions under
 servagent/
   src/servagent/
     __init__.py        # Version
-    cli.py             # CLI entry point (click subcommands: run, status, uninstall, update, oauth)
+    cli.py             # CLI entry point (click subcommands: run, status, uninstall, update, apikey, oauth)
     config.py          # Configuration (pydantic-settings)
     auth.py            # Authentication middleware (Bearer + Basic Auth + OAuth)
     oauth_provider.py  # OAuth 2.0 provider with SQLite storage + static client

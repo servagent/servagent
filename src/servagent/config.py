@@ -8,6 +8,29 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 
 
+def _find_dotenv() -> str:
+    """Locate the .env file.
+
+    Search order:
+      1. /opt/servagent/.env  (production install)
+      2. .env next to the package source tree (dev / git clone)
+      3. .env in the current working directory (fallback)
+    """
+    prod = Path("/opt/servagent/.env")
+    if prod.is_file():
+        return str(prod)
+
+    # Dev path — walk up from this file to the repo root
+    here = Path(__file__).resolve().parent  # src/servagent/
+    repo_root = here.parent.parent          # project root
+    dev = repo_root / ".env"
+    if dev.is_file():
+        return str(dev)
+
+    # Fallback: cwd
+    return ".env"
+
+
 class Settings(BaseSettings):
     """Server configuration loaded from environment variables or .env file."""
 
@@ -62,7 +85,7 @@ class Settings(BaseSettings):
 
     model_config = {
         "env_prefix": "SERVAGENT_",
-        "env_file": ".env",
+        "env_file": _find_dotenv(),
         "env_file_encoding": "utf-8",
     }
 
