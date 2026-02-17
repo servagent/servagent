@@ -82,8 +82,8 @@ class Settings(BaseSettings):
 
     # Tool selection — comma-separated list of tools to expose, or "all".
     # Default exposes the essential tools including file operations.
-    # Use "all" to expose every tool (recommended for large models like Claude, GPT-4).
-    tools: str = "execute_command,write_file,read_file,edit_file,upload_file"
+    # Use "all" to expose all 6 tools (adds service_action and tail_file).
+    tools: str = "execute_command,read_file,write_file,edit_file"
 
     # Logging level
     log_level: str = "INFO"

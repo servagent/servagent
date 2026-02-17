@@ -25,17 +25,10 @@ The server exposes two MCP transports simultaneously:
 |---|---|
 | `execute_command` | Execute any shell command (bash, python, etc.) |
 | `read_file` / `write_file` / `edit_file` | Read, write, and edit files |
-| `read_file_binary` / `write_file_binary` | Binary file transfer (base64) |
-| `upload_file` | Copy a file from one path to another on the remote server |
-| `list_directory` | List directory contents |
-| `move_path` / `copy_path` / `delete_path` | Move, copy, and delete files/directories |
-| `list_processes` / `kill_process` | Process management |
-| `tail_file` | Tail/follow log files or journalctl (remote debugging) |
-| `system_info` / `network_info` | System and network information |
 | `service_action` | Systemd service management (start/stop/restart/status) |
-| `get_environment` | Environment variables |
+| `tail_file` | Tail/follow log files or journalctl (remote debugging) |
 
-Each tool is annotated with MCP `ToolAnnotations` (read-only, destructive, idempotent) to guide AI clients. Server instructions include anti-loop rules, error handling, and workflow guidelines.
+Each tool is annotated with MCP `ToolAnnotations` (read-only, destructive, idempotent) to guide AI clients. Server instructions include anti-loop rules, error handling, and workflow guidelines. Redundant tools (ls, cp, mv, rm, ps, kill, etc.) have been removed — `execute_command` covers all these use cases.
 
 ## Prerequisites
 
@@ -200,7 +193,7 @@ All options are configurable via environment variables or `.env` file:
 | `SERVAGENT_UPLOAD_MAX_SIZE` | `100000000` | Maximum upload file size (bytes, 100 MB) |
 | `SERVAGENT_TLS_CERTFILE` | _(empty)_ | Path to TLS certificate (fullchain.pem) |
 | `SERVAGENT_TLS_KEYFILE` | _(empty)_ | Path to TLS private key (privkey.pem) |
-| `SERVAGENT_TOOLS` | `execute_command,write_file,read_file,edit_file,upload_file` | Tools to expose (comma-separated list, or `all`) |
+| `SERVAGENT_TOOLS` | `execute_command,read_file,write_file,edit_file` | Tools to expose (comma-separated list, or `all` for all 6) |
 | `SERVAGENT_LOG_LEVEL` | `INFO` | Log level |
 | `SERVAGENT_OAUTH_ISSUER_URL` | _(empty)_ | OAuth issuer URL (include `/mcp`). Enables OAuth when set. |
 | `SERVAGENT_OAUTH_CLIENT_ID` | _(empty)_ | Operator Client ID: static OAuth client + `/mcp/register` protection |
