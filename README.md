@@ -355,10 +355,14 @@ In addition to simple Bearer token authentication, the server supports OAuth 2.0
 ### Enabling OAuth
 
 ```bash
-# 1. Generate operator credentials
-bash generate-oauth-credentials.sh              # Display credentials
-bash generate-oauth-credentials.sh --write      # Write directly to .env
+# Interactive: prompts for the issuer URL
+servagent oauth setup
+
+# Non-interactive
+servagent oauth setup --issuer-url https://your-domain.com/mcp
 ```
+
+This generates `CLIENT_ID` and `CLIENT_SECRET`, and writes all three `SERVAGENT_OAUTH_*` variables to `.env`:
 
 ```bash
 # In .env — the URL MUST include the /mcp path
@@ -367,6 +371,19 @@ SERVAGENT_OAUTH_ISSUER_URL=https://your-domain.com/mcp
 # Operator credentials (dual purpose: static OAuth client + /mcp/register protection)
 SERVAGENT_OAUTH_CLIENT_ID=servagent-xxxxxxxxxxxxxxxx
 SERVAGENT_OAUTH_CLIENT_SECRET=a-strong-randomly-generated-secret
+```
+
+### Renewing / Removing OAuth
+
+```bash
+# Regenerate credentials (invalidates all existing sessions)
+servagent oauth renew
+
+# Disable OAuth entirely (comments out vars in .env, removes database)
+servagent oauth remove
+
+# Disable OAuth but keep the database file
+servagent oauth remove --keep-db
 ```
 
 When OAuth is enabled:
@@ -523,7 +540,7 @@ The content of each `SKILL.md` is injected as-is into the MCP instructions under
 servagent/
   src/servagent/
     __init__.py        # Version
-    cli.py             # CLI entry point (click subcommands: run, status, uninstall, update)
+    cli.py             # CLI entry point (click subcommands: run, status, uninstall, update, oauth)
     config.py          # Configuration (pydantic-settings)
     auth.py            # Authentication middleware (Bearer + Basic Auth + OAuth)
     oauth_provider.py  # OAuth 2.0 provider with SQLite storage + static client

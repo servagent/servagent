@@ -25,6 +25,12 @@ servagent uninstall --keep-certs  # Keep Let's Encrypt certs
 servagent update             # Update to latest version
 servagent update develop     # Update from a specific branch
 servagent update --force     # Force reinstall
+servagent oauth setup        # Generate OAuth credentials and write to .env (interactive)
+servagent oauth setup --issuer-url https://example.com/mcp  # Non-interactive
+servagent oauth renew        # Regenerate credentials (invalidates sessions)
+servagent oauth renew --yes  # Non-interactive
+servagent oauth remove       # Disable OAuth and comment out credentials
+servagent oauth remove --yes --keep-db  # Keep the OAuth database
 servagent --version          # Show version
 servagent --help             # Show help with all subcommands
 
@@ -47,7 +53,7 @@ sudo bash uninstall.sh --keep-certs # Keep Let's Encrypt certificates
 
 ## Architecture
 
-- `src/servagent/cli.py` — CLI entry point using click. `@click.group(invoke_without_command=True)` so `servagent` without arguments starts the server. Subcommands: `run` (start server), `status` (show systemd service status + config), `uninstall` (locate and run `uninstall.sh` via sudo), `update` (locate and run `update.sh` via sudo). Script discovery via `_find_script()` checks `/opt/servagent/` (production) then repo root (dev). `--version` flag from `__version__`
+- `src/servagent/cli.py` — CLI entry point using click. `@click.group(invoke_without_command=True)` so `servagent` without arguments starts the server. Subcommands: `run` (start server), `status` (show systemd service status + config), `uninstall` (locate and run `uninstall.sh` via sudo), `update` (locate and run `update.sh` via sudo), `oauth` (group: `setup`, `renew`, `remove` — manage OAuth credentials in `.env`). Script discovery via `_find_script()` checks `/opt/servagent/` (production) then repo root (dev). `.env` discovery via `_find_env_file()` uses the same search order. `--version` flag from `__version__`
 - `src/servagent/server.py` — Server module, Starlette ASGI app exposing both transports:
   - `/mcp` — Streamable HTTP (Claude Desktop, Claude Code, LM Studio)
   - `/sse` — SSE connection endpoint (legacy clients)
@@ -80,7 +86,7 @@ sudo bash uninstall.sh --keep-certs # Keep Let's Encrypt certificates
 - `install.sh` supports `--full-access` flag to grant sudo NOPASSWD to the service user and disable `NoNewPrivileges` in systemd; without the flag, an interactive prompt asks during installation
 - `uninstall.sh` reverses everything done by `install.sh`: stops/removes systemd services, Nginx config, sudoers file, app directory, system user, and optionally Let's Encrypt certificates. Requires confirmation unless `-y` is passed. `--keep-certs` preserves TLS certificates
 - **Tool selection**: `SERVAGENT_TOOLS` controls which tools are exposed. Default is `execute_command,upload_file` (minimal, saves context window for small LLMs). Set to `all` to expose all 18 tools. Invalid tool names are logged as warnings and ignored. In `server.py`, the config string is parsed into a `set[str]` and passed to `register_tools(mcp, enabled_tools=...)`
-- **CLI**: The `servagent` entry point is `servagent.cli:cli` (click group). Without subcommand, it calls `server.main()` to start the server (backward-compatible). `status` queries systemd via `systemctl show` and displays config from `settings`. `uninstall`/`update` delegate to shell scripts found via `_find_script()` (production: `/opt/servagent/`, dev: repo root), executed via `subprocess.run(["sudo", "bash", ...])`. CLI flags map directly to script flags
+- **CLI**: The `servagent` entry point is `servagent.cli:cli` (click group). Without subcommand, it calls `server.main()` to start the server (backward-compatible). `status` queries systemd via `systemctl show` and displays config from `settings`. `uninstall`/`update` delegate to shell scripts found via `_find_script()` (production: `/opt/servagent/`, dev: repo root), executed via `subprocess.run(["sudo", "bash", ...])`. CLI flags map directly to script flags. `oauth` is a click subgroup with three commands: `setup` (generates CLIENT_ID/CLIENT_SECRET, writes to `.env` with `OAUTH_ISSUER_URL`; prompts for issuer URL if `--issuer-url` not given; refuses if OAuth already configured), `renew` (regenerates credentials, deletes OAuth database to invalidate all sessions; requires `--yes` or interactive confirmation), `remove` (comments out all `SERVAGENT_OAUTH_*` vars in `.env`, deletes OAuth database unless `--keep-db`; requires `--yes` or interactive confirmation). All three commands use `_find_env_file()` to auto-detect `.env` or accept `--env-file`. Helper functions `_env_set`, `_env_comment_out`, `_env_get` manipulate `.env` via regex
 
 ## Key Dependencies
 

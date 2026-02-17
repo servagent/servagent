@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -36,6 +38,65 @@ def _find_script(name: str) -> Path | None:
         return dev
 
     return None
+
+
+def _find_env_file() -> Path | None:
+    """Locate the .env file.
+
+    Search order:
+      1. /opt/servagent/.env  (production)
+      2. Repo root .env       (dev)
+    """
+    prod = Path("/opt/servagent/.env")
+    if prod.is_file():
+        return prod
+
+    here = Path(__file__).resolve().parent
+    repo_root = here.parent.parent
+    dev = repo_root / ".env"
+    if dev.is_file():
+        return dev
+
+    return None
+
+
+def _generate_credentials() -> tuple[str, str]:
+    """Generate a CLIENT_ID and CLIENT_SECRET pair."""
+    client_id = "servagent-" + secrets.token_hex(8)
+    client_secret = secrets.token_urlsafe(48)
+    return client_id, client_secret
+
+
+def _env_set(env_path: Path, key: str, value: str) -> None:
+    """Set a key=value in a .env file.
+
+    If the key exists (commented or not), it is replaced.
+    Otherwise it is appended.
+    """
+    content = env_path.read_text()
+    # Match both "KEY=..." and "# KEY=..."
+    pattern = re.compile(rf"^[#\s]*{re.escape(key)}\s*=.*$", re.MULTILINE)
+    if pattern.search(content):
+        content = pattern.sub(f"{key}={value}", content)
+    else:
+        content = content.rstrip("\n") + f"\n{key}={value}\n"
+    env_path.write_text(content)
+
+
+def _env_comment_out(env_path: Path, key: str) -> None:
+    """Comment out a key in a .env file (prefix with '# ')."""
+    content = env_path.read_text()
+    pattern = re.compile(rf"^({re.escape(key)}\s*=.*)$", re.MULTILINE)
+    content = pattern.sub(r"# \1", content)
+    env_path.write_text(content)
+
+
+def _env_get(env_path: Path, key: str) -> str:
+    """Read a key from a .env file. Returns empty string if not found or commented."""
+    content = env_path.read_text()
+    pattern = re.compile(rf"^{re.escape(key)}\s*=\s*(.*)$", re.MULTILINE)
+    m = pattern.search(content)
+    return m.group(1).strip() if m else ""
 
 
 # ------------------------------------------------------------------
@@ -188,3 +249,141 @@ def update(branch: str | None, force: bool) -> None:
 
     result = subprocess.run(cmd)
     raise SystemExit(result.returncode)
+
+
+# ------------------------------------------------------------------
+# oauth
+# ------------------------------------------------------------------
+
+@cli.group()
+def oauth() -> None:
+    """Manage OAuth 2.0 credentials."""
+
+
+@oauth.command()
+@click.option("--issuer-url", prompt="Issuer URL (e.g. https://your-domain.com/mcp)",
+              help="OAuth issuer URL (must include /mcp).")
+@click.option("--env-file", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Path to the .env file (auto-detected if omitted).")
+def setup(issuer_url: str, env_file: str | None) -> None:
+    """Generate OAuth credentials and write them to .env."""
+    env_path = Path(env_file) if env_file else _find_env_file()
+    if env_path is None:
+        click.echo("Error: .env file not found. Create one first (cp .env.example .env).", err=True)
+        raise SystemExit(1)
+
+    # Check if OAuth is already configured
+    existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
+    if existing_id:
+        click.echo(f"  OAuth is already configured (client_id={existing_id}).")
+        click.echo("  Use 'servagent oauth renew' to regenerate credentials")
+        click.echo("  or  'servagent oauth remove' to disable OAuth.")
+        raise SystemExit(1)
+
+    client_id, client_secret = _generate_credentials()
+
+    _env_set(env_path, "SERVAGENT_OAUTH_ISSUER_URL", issuer_url)
+    _env_set(env_path, "SERVAGENT_OAUTH_CLIENT_ID", client_id)
+    _env_set(env_path, "SERVAGENT_OAUTH_CLIENT_SECRET", client_secret)
+
+    click.echo()
+    click.echo("  OAuth credentials generated and written to " + click.style(str(env_path), fg="cyan"))
+    click.echo()
+    click.echo(f"    Issuer URL:    {click.style(issuer_url, fg='green')}")
+    click.echo(f"    Client ID:     {click.style(client_id, fg='green')}")
+    click.echo(f"    Client Secret: {click.style(client_secret, fg='green')}")
+    click.echo()
+    click.echo("  Restart the server for changes to take effect:")
+    if shutil.which("systemctl"):
+        click.echo("    sudo systemctl restart servagent")
+    else:
+        click.echo("    servagent run")
+    click.echo()
+
+
+@oauth.command()
+@click.option("--env-file", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Path to the .env file (auto-detected if omitted).")
+@click.confirmation_option(prompt="This will invalidate all existing OAuth sessions. Continue?")
+def renew(env_file: str | None) -> None:
+    """Regenerate OAuth credentials (invalidates existing sessions)."""
+    env_path = Path(env_file) if env_file else _find_env_file()
+    if env_path is None:
+        click.echo("Error: .env file not found.", err=True)
+        raise SystemExit(1)
+
+    existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
+    if not existing_id:
+        click.echo("  OAuth is not configured. Use 'servagent oauth setup' first.", err=True)
+        raise SystemExit(1)
+
+    client_id, client_secret = _generate_credentials()
+
+    _env_set(env_path, "SERVAGENT_OAUTH_CLIENT_ID", client_id)
+    _env_set(env_path, "SERVAGENT_OAUTH_CLIENT_SECRET", client_secret)
+
+    click.echo()
+    click.echo("  OAuth credentials renewed in " + click.style(str(env_path), fg="cyan"))
+    click.echo()
+    click.echo(f"    Client ID:     {click.style(client_id, fg='green')}")
+    click.echo(f"    Client Secret: {click.style(client_secret, fg='green')}")
+    click.echo()
+
+    # Remove OAuth database to clear old tokens
+    from servagent.config import settings
+    db_path = settings.oauth_database_path
+    if db_path.exists():
+        db_path.unlink()
+        click.echo(f"  OAuth database removed: {db_path}")
+
+    click.echo()
+    click.echo("  Restart the server for changes to take effect:")
+    if shutil.which("systemctl"):
+        click.echo("    sudo systemctl restart servagent")
+    else:
+        click.echo("    servagent run")
+    click.echo()
+    click.echo(click.style("  All existing OAuth sessions have been invalidated.", fg="yellow"))
+    click.echo()
+
+
+@oauth.command()
+@click.option("--env-file", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Path to the .env file (auto-detected if omitted).")
+@click.option("--keep-db", is_flag=True, help="Keep the OAuth database file.")
+@click.confirmation_option(prompt="This will disable OAuth. Continue?")
+def remove(env_file: str | None, keep_db: bool) -> None:
+    """Disable OAuth and remove credentials from .env."""
+    env_path = Path(env_file) if env_file else _find_env_file()
+    if env_path is None:
+        click.echo("Error: .env file not found.", err=True)
+        raise SystemExit(1)
+
+    existing_id = _env_get(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
+    if not existing_id:
+        click.echo("  OAuth is not configured. Nothing to remove.")
+        return
+
+    _env_comment_out(env_path, "SERVAGENT_OAUTH_ISSUER_URL")
+    _env_comment_out(env_path, "SERVAGENT_OAUTH_CLIENT_ID")
+    _env_comment_out(env_path, "SERVAGENT_OAUTH_CLIENT_SECRET")
+
+    click.echo()
+    click.echo("  OAuth credentials commented out in " + click.style(str(env_path), fg="cyan"))
+
+    if not keep_db:
+        from servagent.config import settings
+        db_path = settings.oauth_database_path
+        if db_path.exists():
+            db_path.unlink()
+            click.echo(f"  OAuth database removed: {db_path}")
+
+    click.echo()
+    click.echo("  Restart the server for changes to take effect:")
+    if shutil.which("systemctl"):
+        click.echo("    sudo systemctl restart servagent")
+    else:
+        click.echo("    servagent run")
+    click.echo()
+    click.echo(click.style("  OAuth has been disabled.", fg="yellow"))
+    click.echo()
